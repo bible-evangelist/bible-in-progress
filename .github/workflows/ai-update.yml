@@ -1,0 +1,73 @@
+name: AI Branch Monthly Update
+
+# Workflow that updates the AI branch automatically every month.
+# See AI_CONTRIBUTING.md for details.
+
+on:
+  schedule:
+    # 00:00 UTC on the 1st of each month
+    - cron: '0 0 1 * *'
+  workflow_dispatch:
+    # Manual run is also possible (for smoke testing)
+
+jobs:
+  update-ai-branch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout ai branch
+        uses: actions/checkout@v4
+        with:
+          ref: ai
+          fetch-depth: 0
+
+      - name: Fetch human branch for reference
+        run: |
+          git fetch origin human:human
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install anthropic
+          # OR: pip install openai
+
+      - name: Run AI revision script
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # OR: OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python scripts/ai_revise.py
+
+      - name: Configure git for AI commits
+        run: |
+          git config user.name "ai-scribe"
+          git config user.email "ai-scribe@bible-in-progress.local"
+
+      - name: Commit and push if changed
+        run: |
+          if [[ -n $(git status -s) ]]; then
+            DATE=$(date +%Y-%m)
+            MODEL="${AI_MODEL:-claude-sonnet-4}"
+            git add book/
+            git commit -m "AI revision: ${DATE} (model: ${MODEL})
+
+          This is an automated revision by ${MODEL}.
+          See AI_CONTRIBUTING.md for the philosophy and process.
+
+          Prompt version: $(cat prompts/VERSION 2>/dev/null || echo 'unversioned')
+          Generated at: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+          "
+            git push origin ai
+          else
+            echo "No changes to commit"
+          fi
+
+# Required secrets:
+#   ANTHROPIC_API_KEY or OPENAI_API_KEY
+# Configure under Settings -> Secrets and variables -> Actions.
