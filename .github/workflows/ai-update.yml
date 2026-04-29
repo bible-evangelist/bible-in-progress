@@ -10,6 +10,11 @@ on:
   workflow_dispatch:
     # Manual run is also possible (for smoke testing)
 
+env:
+  # Model used by the AI scribe. Override in repo Variables (not Secrets) if you
+  # want to switch to a different model without editing this file.
+  AI_MODEL: ${{ vars.AI_MODEL || 'claude-opus-4-7' }}
+
 jobs:
   update-ai-branch:
     runs-on: ubuntu-latest
@@ -30,17 +35,17 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |
+          pip install --upgrade pip
           pip install anthropic
-          # OR: pip install openai
 
       - name: Run AI revision script
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # OR: OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AI_MODEL: ${{ env.AI_MODEL }}
         run: |
           python scripts/ai_revise.py
 
@@ -53,11 +58,10 @@ jobs:
         run: |
           if [[ -n $(git status -s) ]]; then
             DATE=$(date +%Y-%m)
-            MODEL="${AI_MODEL:-claude-sonnet-4}"
             git add book/
-            git commit -m "AI revision: ${DATE} (model: ${MODEL})
+            git commit -m "AI revision: ${DATE} (model: ${AI_MODEL})
 
-          This is an automated revision by ${MODEL}.
+          This is an automated revision by ${AI_MODEL}.
           See AI_CONTRIBUTING.md for the philosophy and process.
 
           Prompt version: $(cat prompts/VERSION 2>/dev/null || echo 'unversioned')
@@ -68,6 +72,9 @@ jobs:
             echo "No changes to commit"
           fi
 
-# Required secrets:
-#   ANTHROPIC_API_KEY or OPENAI_API_KEY
-# Configure under Settings -> Secrets and variables -> Actions.
+# Required secret:
+#   ANTHROPIC_API_KEY
+# Configure under Settings -> Secrets and variables -> Actions -> Secrets.
+#
+# Optional repo variable (Settings -> Secrets and variables -> Actions -> Variables):
+#   AI_MODEL  e.g. "claude-sonnet-4-6" to switch from the Opus 4.7 default.
